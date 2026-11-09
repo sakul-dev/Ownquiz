@@ -16,6 +16,13 @@ const state = {
 
 let quiz = { order: [], pos: 0, correct: 0, answered: 0, current: null, selected: null };
 
+function closeMenu() {
+  const toolbar = document.getElementById('toolbar');
+  const toggle = document.getElementById('menuToggle');
+  if (toolbar) toolbar.classList.remove('open');
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+}
+
 function esc(value) {
   return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -100,7 +107,15 @@ function parseMethods(md) {
   const flush = () => {
     if (!current) return;
     current.fieldMap = {};
-    for (const f of current.fields) current.fieldMap[f.label] = f.value;
+    current.plainMap = {};
+    for (const f of current.fields) {
+      current.fieldMap[f.label] = f.value;
+      current.plainMap[f.label] = plain(f.value);
+    }
+    current.searchText = [current.name, current.location, current.section, current.part]
+      .concat(current.fields.map(f => f.label + ' ' + f.value))
+      .join(' ')
+      .toLowerCase();
     const imp = (current.fieldMap['Importance'] || '').toLowerCase();
     current.importance = /\bmajor\b/.test(imp) ? 'major' : /\bminor\b/.test(imp) ? 'minor' : 'mid';
     current.id = current.name;
@@ -277,40 +292,58 @@ const QUESTION_TYPES = [
   }
 ];
 
-function makeQuestion(card) {
-  const candidates = [];
+function buildQuestionPools() {
+  const pools = {};
   for (const type of QUESTION_TYPES) {
-    const raw = card.fieldMap[type.field];
-    if (!raw) continue;
-    const correctText = plain(raw);
-    if (!correctText) continue;
-    const seen = new Set([correctText]);
-    const distractors = [];
-    const pool = shuffleArray(state.cards.filter(c => c !== card && c.fieldMap[type.field]));
-    for (const c of pool) {
-      const t = plain(c.fieldMap[type.field]);
+    const seen = new Set();
+    const arr = [];
+    for (const c of shuffleArray(state.cards.slice())) {
+      const t = c.plainMap[type.field];
       if (!t || seen.has(t)) continue;
       seen.add(t);
-      distractors.push(t);
-      if (distractors.length === 3) break;
+      arr.push(t);
     }
+    pools[type.field] = arr;
+  }
+  const names = [];
+  const seenNames = new Set();
+  for (const c of shuffleArray(state.cards.slice())) {
+    if (seenNames.has(c.name)) continue;
+    seenNames.add(c.name);
+    names.push(c.name);
+  }
+  pools.names = names;
+  return pools;
+}
+
+function pickDistractors(pool, correct, count) {
+  const out = [];
+  if (!pool || pool.length <= 1) return out;
+  const start = Math.floor(Math.random() * pool.length);
+  for (let i = 0; i < pool.length && out.length < count; i++) {
+    const t = pool[(start + i) % pool.length];
+    if (t === correct) continue;
+    out.push(t);
+  }
+  return out;
+}
+
+function makeQuestion(card, pools) {
+  const candidates = [];
+  for (const type of QUESTION_TYPES) {
+    const correctText = card.plainMap[type.field];
+    if (!correctText) continue;
+    const distractors = pickDistractors(pools[type.field], correctText, 3);
     if (distractors.length >= 2) {
       candidates.push({ label: type.label, promptHtml: type.prompt(card), correctText: correctText, distractors: distractors });
     }
   }
 
-  const clueRaw = card.fieldMap['Plain-language use'] || card.fieldMap['What it does'];
+  const clueRaw = card.plainMap['Plain-language use'] || card.plainMap['What it does'];
   if (clueRaw) {
-    let clue = plain(clueRaw);
+    let clue = clueRaw;
     if (clue.length > 240) clue = clue.slice(0, 240) + '…';
-    const seen = new Set([card.name]);
-    const distractors = [];
-    for (const c of shuffleArray(state.cards.filter(c => c !== card))) {
-      if (seen.has(c.name)) continue;
-      seen.add(c.name);
-      distractors.push(c.name);
-      if (distractors.length === 3) break;
-    }
+    const distractors = pickDistractors(pools.names, card.name, 3);
     if (clue && distractors.length >= 2) {
       candidates.push({
         label: 'Reverse lookup',
@@ -339,8 +372,9 @@ function makeQuestion(card) {
 
 function startQuiz() {
   quiz = { order: [], pos: 0, correct: 0, answered: 0, current: null, selected: null };
+  const pools = buildQuestionPools();
   const source = shuffleArray(state.deck.slice());
-  quiz.order = source.map(makeQuestion).filter(Boolean);
+  quiz.order = source.map(c => makeQuestion(c, pools)).filter(Boolean);
   renderQuiz();
 }
 
@@ -435,13 +469,7 @@ function renderBrowse() {
     ? state.cards
     : state.cards.filter(c => c.section === state.section);
   const filtered = q
-    ? base.filter(c => {
-        const hay = [c.name, c.location, c.section, c.part]
-          .concat(c.fields.map(f => f.label + ' ' + f.value))
-          .join(' ')
-          .toLowerCase();
-        return hay.indexOf(q) !== -1;
-      })
+    ? base.filter(c => c.searchText.indexOf(q) !== -1)
     : base;
   const list = document.getElementById('browseList');
   if (!filtered.length) {
@@ -458,14 +486,23 @@ function renderBrowse() {
   for (const g of groups.values()) {
     html += '<div class="browse-group"><h3>' + esc(g.section || g.part) + '</h3>';
     for (const c of g.items) {
-      html += '<details class="browse-item">' +
+      html += '<details class="browse-item" data-card="' + state.cards.indexOf(c) + '">' +
         '<summary><span class="browse-title"><code>' + esc(c.name) + '</code>' + sevBadge(c) + '</span><span class="loc">' + esc(c.location) + '</span></summary>' +
-        '<div class="browse-detail">' + fieldsHtml(c) + '</div>' +
+        '<div class="browse-detail"></div>' +
       '</details>';
     }
     html += '</div>';
   }
   list.innerHTML = html;
+}
+
+function loadBrowseDetail(details) {
+  const detail = details.querySelector('.browse-detail');
+  if (!detail || detail.dataset.loaded === '1') return;
+  const card = state.cards[Number(details.dataset.card)];
+  if (!card) return;
+  detail.innerHTML = fieldsHtml(card);
+  detail.dataset.loaded = '1';
 }
 
 function buildSectionFilter() {
@@ -511,9 +548,30 @@ function setMode(mode) {
   else if (mode === 'quiz') startQuiz();
   else renderBrowse();
   updateFooter();
+  closeMenu();
 }
 
 function setupEvents() {
+  const menuToggle = document.getElementById('menuToggle');
+  const toolbar = document.getElementById('toolbar');
+  menuToggle.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = !toolbar.classList.contains('open');
+    toolbar.classList.toggle('open', open);
+    menuToggle.setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', e => {
+    if (!toolbar.classList.contains('open')) return;
+    if (toolbar.contains(e.target) || menuToggle.contains(e.target)) return;
+    closeMenu();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeMenu();
+  });
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 900) closeMenu();
+  });
+
   document.getElementById('tabs').addEventListener('click', e => {
     const tab = e.target.closest('.tab');
     if (tab) setMode(tab.dataset.mode);
@@ -567,6 +625,12 @@ function setupEvents() {
   });
 
   document.getElementById('browseSearch').addEventListener('input', renderBrowse);
+  document.getElementById('browseList').addEventListener('toggle', e => {
+    const details = e.target;
+    if (details.classList && details.classList.contains('browse-item') && details.open) {
+      loadBrowseDetail(details);
+    }
+  }, true);
 
   document.getElementById('fileInput').addEventListener('change', e => {
     const file = e.target.files && e.target.files[0];
