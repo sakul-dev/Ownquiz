@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Methods Trainer · Stock Options</title>
+  <link rel="stylesheet" href="./style.css" type="text/css">
+</head>
+<body>
+<header class="app-header">
+  <div class="wrap header-row">
+    <div class="brand">
+      <h1>Methods Trainer</h1>
+      <p>Flashcards &amp; quiz for <code>stock_options.py</code> and <code>main.py</code></p>
+    </div>
+    <div class="toolbar">
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-mode="flashcards" type="button">Flashcards</button>
+        <button class="tab" data-mode="quiz" type="button">Quiz</button>
+        <button class="tab" data-mode="browse" type="button">Browse</button>
+      </div>
+      <label class="filter">Section
+        <select id="sectionFilter"></select>
+      </label>
+      <label class="filter">Importance
+        <select id="severityFilter"></select>
+      </label>
+      <button class="btn ghost" id="shuffleBtn" type="button">Shuffle: off</button>
+      <button class="btn ghost" id="resetBtn" type="button">Reset progress</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="loading" class="panel center">
+    <div class="loader"></div>
+    <p>Loading <code>METHODS.md</code>…</p>
+  </div>
+
+  <div id="loadError" class="panel hidden">
+    <h2>Could not load METHODS.md</h2>
+    <p class="muted" id="loadErrorMsg"></p>
+    <p>Browsers block reading local files over <code>file://</code>. You can either:</p>
+    <ol>
+      <li>Start a tiny server in the <code>solution</code> folder:<br>
+        <code>python -m http.server 8000</code><br>
+        then open <code>http://localhost:8000/doc/learn.html</code>.</li>
+      <li>Or choose the file manually:</li>
+    </ol>
+    <p><input type="file" id="fileInput" accept=".md,text/markdown,text/plain"></p>
+  </div>
+
+  <div id="app" class="hidden">
+    <section id="view-flashcards" class="view">
+      <div class="study-head">
+        <div id="fcCounter">Card 1 / 1</div>
+        <div id="fcKnown">0 / 1 known</div>
+      </div>
+      <div class="progress"><div class="bar" id="fcBar"></div></div>
+      <div class="flashcard-stage">
+        <div class="flashcard" id="flashcard">
+          <div class="face front" id="fcFront"></div>
+          <div class="face back" id="fcBack"></div>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="btn" id="prevCard" type="button">← Prev</button>
+        <button class="btn" id="flipCardBtn" type="button">Flip (Space)</button>
+        <button class="btn warn" id="stillBtn" type="button">Still learning</button>
+        <button class="btn good" id="gotBtn" type="button">Got it</button>
+        <button class="btn" id="nextCard" type="button">Next →</button>
+      </div>
+    </section>
+
+    <section id="view-quiz" class="view hidden">
+      <div id="quizBody"></div>
+    </section>
+
+    <section id="view-browse" class="view hidden">
+      <div class="browse-tools">
+        <input id="browseSearch" type="search" placeholder="Search methods, parameters, or text…">
+      </div>
+      <div id="browseList"></div>
+    </section>
+  </div>
+</main>
+
+<footer class="wrap footer muted">
+  <span id="footerStats"></span>
+</footer>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
