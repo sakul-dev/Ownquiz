@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ownquiz the method quizer for your slopcode</title>
+  <title>Ownquiz — Markdown flashcards &amp; quiz</title>
   <link rel="stylesheet" href="./style.css" type="text/css">
 </head>
 <body>
 <header class="app-header">
   <div class="wrap header-row">
     <div class="brand">
-      <h1>Methods Trainer</h1>
-      <p>Flashcards &amp; quiz for <code>stock_options.py</code> and <code>main.py</code></p>
+      <h1>Ownquiz</h1>
+      <p>Flashcards &amp; quiz from any Markdown reference</p>
     </div>
     <button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="toolbar" aria-label="Toggle menu">
       <span class="bar"></span>
@@ -32,6 +32,11 @@
       </label>
       <button class="btn ghost" id="shuffleBtn" type="button">Shuffle: off</button>
       <button class="btn ghost" id="resetBtn" type="button">Reset progress</button>
+      <label class="filter">Saved
+        <select id="savedSelect" title="Load a previously imported Markdown file"></select>
+      </label>
+      <button class="btn primary" id="importBtn" type="button" title="Import your own Markdown reference">Import Markdown</button>
+      <input type="file" id="importInput" accept=".md,text/markdown,text/plain" class="hidden">
     </div>
   </div>
 </header>
@@ -39,20 +44,24 @@
 <main class="wrap">
   <div id="loading" class="panel center">
     <div class="loader"></div>
-    <p>Loading <code>METHODS.md</code>…</p>
+    <p>Loading reference…</p>
   </div>
 
   <div id="loadError" class="panel hidden">
-    <h2>Could not load METHODS.md</h2>
+    <h2>Could not load a Markdown reference</h2>
     <p class="muted" id="loadErrorMsg"></p>
     <p>Browsers block reading local files over <code>file://</code>. You can either:</p>
     <ol>
-      <li>Start a tiny server in the <code>solution</code> folder:<br>
+      <li>Start a tiny server in this folder:<br>
         <code>python -m http.server 8000</code><br>
-        then open <code>http://localhost:8000/doc/learn.html</code>.</li>
-      <li>Or choose the file manually:</li>
+        then open <code>http://localhost:8000</code>.</li>
+      <li>Or import a Markdown file below:</li>
     </ol>
     <p><input type="file" id="fileInput" accept=".md,text/markdown,text/plain"></p>
+    <p class="muted">Expected format: <code>#### Name</code> headings with
+      <code>- **Label:** value</code> fields, optionally an
+      <code>Importance</code> field containing <code>major</code>,
+      <code>mid</code>, or <code>minor</code>.</p>
   </div>
 
   <div id="app" class="hidden">
@@ -83,7 +92,7 @@
 
     <section id="view-browse" class="view hidden">
       <div class="browse-tools">
-        <input id="browseSearch" type="search" placeholder="Search methods, parameters, or text…">
+        <input id="browseSearch" type="search" placeholder="Search names, labels, or text…">
       </div>
       <div id="browseList"></div>
     </section>

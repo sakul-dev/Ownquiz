@@ -1,6 +1,9 @@
 'use strict';
 
-const STORAGE_KEY = 'methods-trainer-known-v1';
+const LEGACY_STORAGE_KEY = 'methods-trainer-known-v1';
+const STORAGE_PREFIX = 'ownquiz.v1.';
+const REGISTRY_KEY = 'ownquiz.docs.v1';
+const CHUNK_SIZE = 200000;
 
 const state = {
   cards: [],
@@ -11,10 +14,130 @@ const state = {
   mode: 'flashcards',
   shuffled: false,
   section: 'all',
-  severity: 'all'
+  severity: 'all',
+  source: 'METHODS.md',
+  docId: '',
+  savedDeckIds: null,
+  storageWarning: ''
 };
 
 let quiz = { order: [], pos: 0, correct: 0, answered: 0, current: null, selected: null };
+
+function storageGet(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+
+function storageSet(key, value) {
+  try { localStorage.setItem(key, value); return true; } catch (e) { return false; }
+}
+
+function storageRemove(key) {
+  try { localStorage.removeItem(key); } catch (e) {}
+}
+
+function readJson(key) {
+  const raw = storageGet(key);
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+
+function hashString(str) {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+function documentId(md) {
+  return 'd' + hashString(String(md));
+}
+
+function docKey(suffix) {
+  return STORAGE_PREFIX + state.docId + '.' + suffix;
+}
+
+function readRegistry() {
+  const list = readJson(REGISTRY_KEY);
+  return Array.isArray(list) ? list : [];
+}
+
+function writeRegistry(list) {
+  storageSet(REGISTRY_KEY, JSON.stringify(list));
+}
+
+function registerSavedDocument(meta) {
+  const list = readRegistry().filter(d => d.id !== meta.id);
+  list.unshift(meta);
+  writeRegistry(list);
+  renderSavedOptions();
+}
+
+function unregisterSavedDocument(id) {
+  writeRegistry(readRegistry().filter(d => d.id !== id));
+  renderSavedOptions();
+}
+
+function saveDocument(id, name, text) {
+  const metaKey = STORAGE_PREFIX + id + '.meta';
+  const oldMeta = readJson(metaKey);
+  const chunks = Math.max(1, Math.ceil(text.length / CHUNK_SIZE));
+  try {
+    for (let i = 0; i < chunks; i++) {
+      const chunkKey = STORAGE_PREFIX + id + '.md.' + i;
+      const chunk = text.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      if (!storageSet(chunkKey, chunk)) throw new Error('localStorage quota exceeded');
+    }
+    if (oldMeta && oldMeta.chunks > chunks) {
+      for (let i = chunks; i < oldMeta.chunks; i++) storageRemove(STORAGE_PREFIX + id + '.md.' + i);
+    }
+    const meta = { id: id, name: name, size: text.length, chunks: chunks, savedAt: Date.now() };
+    if (!storageSet(metaKey, JSON.stringify(meta))) throw new Error('localStorage quota exceeded');
+    registerSavedDocument(meta);
+    return true;
+  } catch (e) {
+    if (!oldMeta) {
+      for (let i = 0; i < chunks; i++) storageRemove(STORAGE_PREFIX + id + '.md.' + i);
+      storageRemove(metaKey);
+      unregisterSavedDocument(id);
+    }
+    state.storageWarning = 'Could not save "' + name + '" locally; browser storage may be full.';
+    return false;
+  }
+}
+
+function loadDocument(id) {
+  const meta = readJson(STORAGE_PREFIX + id + '.meta');
+  if (!meta || !meta.chunks) throw new Error('The saved data for this file is missing.');
+  let text = '';
+  for (let i = 0; i < meta.chunks; i++) {
+    const chunk = storageGet(STORAGE_PREFIX + id + '.md.' + i);
+    if (chunk === null) throw new Error('Saved file is incomplete (missing part ' + (i + 1) + ' of ' + meta.chunks + ').');
+    text += chunk;
+  }
+  return { meta: meta, text: text };
+}
+
+function renderSavedOptions() {
+  const sel = document.getElementById('savedSelect');
+  if (!sel) return;
+  const list = readRegistry();
+  let html = '<option value="">Saved files…</option>' +
+    '<option value="__default__">METHODS.md (default)</option>';
+  for (const doc of list) {
+    const when = doc.savedAt ? new Date(doc.savedAt).toLocaleDateString() : '';
+    const size = doc.size ? Math.max(1, Math.round(doc.size / 1024)) + ' KB' : '';
+    const label = doc.name + (size ? ' · ' + size : '') + (when ? ' · ' + when : '');
+    html += '<option value="' + esc(doc.id) + '">' + esc(label) + '</option>';
+  }
+  sel.innerHTML = html;
+  sel.value = state.docId && list.some(d => d.id === state.docId) ? state.docId : '';
+}
 
 function closeMenu() {
   const toolbar = document.getElementById('toolbar');
@@ -103,6 +226,7 @@ function parseMethods(md) {
   let section = '';
   let current = null;
   let currentField = null;
+  const cardLevel = /^####\s+/m.test(md) ? 4 : /^###\s+/m.test(md) ? 3 : /^##\s+/m.test(md) ? 2 : 1;
 
   const flush = () => {
     if (!current) return;
@@ -125,30 +249,40 @@ function parseMethods(md) {
   };
 
   for (const line of lines) {
-    if (/^####\s+/.test(line)) {
-      flush();
-      const rest = line.replace(/^####\s+/, '').trim();
-      const codeMatch = rest.match(/`([^`]+)`/);
-      const name = codeMatch ? codeMatch[1] : rest;
-      const dashMatch = rest.match(/—\s*(.+)$/);
-      current = {
-        name: name,
-        title: plain(rest),
-        location: dashMatch ? plain(dashMatch[1]) : '',
-        part: plain(part),
-        section: plain(section),
-        fields: [],
-        fieldMap: {},
-        id: name
-      };
-      currentField = null;
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      const level = heading[1].length;
+      const rest = heading[2].trim();
+      if (level === cardLevel) {
+        flush();
+        const codeMatch = rest.match(/`([^`]+)`/);
+        const name = codeMatch ? codeMatch[1] : rest;
+        const dashMatch = rest.match(/—\s*(.+)$/);
+        current = {
+          name: name,
+          title: plain(rest),
+          location: dashMatch ? plain(dashMatch[1]) : '',
+          part: plain(part),
+          section: plain(section),
+          fields: [],
+          fieldMap: {},
+          id: name
+        };
+        currentField = null;
+      } else if (level === cardLevel - 1) {
+        flush();
+        section = rest;
+      } else if (level <= cardLevel - 2) {
+        flush();
+        part = rest;
+        section = '';
+      }
       continue;
     }
-    if (/^###\s+/.test(line)) { flush(); section = line.replace(/^###\s+/, '').trim(); continue; }
-    if (/^##\s+/.test(line)) { flush(); part = line.replace(/^##\s+/, '').trim(); section = ''; continue; }
     if (/^---\s*$/.test(line)) { flush(); continue; }
     if (!current) continue;
-    const fieldMatch = line.match(/^\s*-\s+\*\*(.+?):\*\*\s*(.*)$/);
+    const fieldMatch = line.match(/^\s*-\s+\*\*(.+?):\*\*\s*(.*)$/) ||
+      line.match(/^\s*-\s+\*\*(.+?)\*\*:\s*(.*)$/);
     if (fieldMatch) {
       const field = { label: fieldMatch[1].trim(), value: fieldMatch[2].trim() };
       current.fields.push(field);
@@ -175,31 +309,74 @@ function shuffleArray(arr) {
 }
 
 function saveProgress() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(state.known))); } catch (e) {}
+  if (!state.docId) return;
+  const payload = {
+    known: Array.from(state.known),
+    index: state.index,
+    mode: state.mode,
+    section: state.section,
+    severity: state.severity,
+    shuffled: state.shuffled,
+    deckIds: state.shuffled ? state.deck.map(c => c.id) : []
+  };
+  storageSet(docKey('progress'), JSON.stringify(payload));
 }
 
 function loadProgress() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) state.known = new Set(JSON.parse(raw));
-  } catch (e) {
-    state.known = new Set();
+  state.known = new Set();
+  state.index = 0;
+  state.mode = 'flashcards';
+  state.section = 'all';
+  state.severity = 'all';
+  state.shuffled = false;
+  state.savedDeckIds = null;
+  const saved = readJson(docKey('progress'));
+  if (saved) {
+    if (Array.isArray(saved.known)) state.known = new Set(saved.known);
+    if (Number.isInteger(saved.index)) state.index = saved.index;
+    if (saved.mode) state.mode = saved.mode;
+    if (saved.section) state.section = saved.section;
+    if (saved.severity) state.severity = saved.severity;
+    state.shuffled = !!saved.shuffled;
+    if (Array.isArray(saved.deckIds)) state.savedDeckIds = saved.deckIds;
+    return;
+  }
+  const legacy = readJson(LEGACY_STORAGE_KEY);
+  if (Array.isArray(legacy) && state.source === 'METHODS.md') {
+    state.known = new Set(legacy);
+    storageRemove(LEGACY_STORAGE_KEY);
   }
 }
 
-function rebuildDeck() {
+function rebuildDeck(options) {
+  options = options || {};
   let base = state.section === 'all'
     ? state.cards.slice()
     : state.cards.filter(c => c.section === state.section);
   if (state.severity !== 'all') base = base.filter(c => c.importance === state.severity);
-  state.deck = base.slice();
-  if (state.shuffled) {
+  if (state.shuffled && options.restoreOrder && Array.isArray(state.savedDeckIds)) {
+    const byId = new Map();
+    for (const card of base) if (!byId.has(card.id)) byId.set(card.id, card);
+    const ordered = [];
+    for (const id of state.savedDeckIds) {
+      if (byId.has(id)) {
+        ordered.push(byId.get(id));
+        byId.delete(id);
+      }
+    }
+    for (const card of base) if (byId.has(card.id)) ordered.push(card);
+    state.deck = ordered.length === base.length ? ordered : base.slice();
+    if (state.deck.length !== base.length) shuffleArray(state.deck);
+  } else if (state.shuffled) {
+    state.deck = base.slice();
     shuffleArray(state.deck);
   } else {
+    state.deck = base.slice();
     const rank = { major: 0, mid: 1, minor: 2 };
     state.deck.sort((a, b) => rank[a.importance] - rank[b.importance]);
   }
-  state.index = 0;
+  if (!options.keepIndex) state.index = 0;
+  if (state.index >= state.deck.length || state.index < 0) state.index = 0;
   state.flipped = false;
 }
 
@@ -223,7 +400,7 @@ function renderFlashcard() {
   const cardEl = document.getElementById('flashcard');
   if (!state.deck.length) {
     cardEl.classList.remove('flipped');
-    front.innerHTML = '<p class="muted">No methods in this section.</p>';
+    front.innerHTML = '<p class="muted">No entries in this section.</p>';
     back.innerHTML = '';
     document.getElementById('fcCounter').textContent = '0 / 0';
     document.getElementById('fcKnown').textContent = '0 / 0 known';
@@ -253,6 +430,7 @@ function moveCard(delta) {
   if (!state.deck.length) return;
   state.index = (state.index + delta + state.deck.length) % state.deck.length;
   renderFlashcard();
+  saveProgress();
 }
 
 function markCard(isKnown) {
@@ -347,7 +525,7 @@ function makeQuestion(card, pools) {
     if (clue && distractors.length >= 2) {
       candidates.push({
         label: 'Reverse lookup',
-        promptHtml: 'Which method matches this description?<span class="clue">“' + esc(clue) + '”</span>',
+        promptHtml: 'Which entry matches this description?<span class="clue">“' + esc(clue) + '”</span>',
         correctText: card.name,
         distractors: distractors
       });
@@ -370,18 +548,93 @@ function makeQuestion(card, pools) {
   };
 }
 
-function startQuiz() {
+function saveQuizState() {
+  if (!state.docId) return;
+  const payload = {
+    deckIds: state.deck.map(c => c.id),
+    pos: quiz.pos,
+    correct: quiz.correct,
+    answered: quiz.answered,
+    selected: quiz.selected,
+    order: quiz.order.map(q => ({
+      cardId: q.card ? q.card.id : '',
+      label: q.label,
+      promptHtml: q.promptHtml,
+      options: q.options,
+      correctText: q.correctText
+    }))
+  };
+  storageSet(docKey('quiz'), JSON.stringify(payload));
+}
+
+function clearQuizState() {
+  if (state.docId) storageRemove(docKey('quiz'));
+}
+
+function restoreQuizState() {
+  const saved = readJson(docKey('quiz'));
+  if (!saved || !Array.isArray(saved.order) || !Array.isArray(saved.deckIds)) return null;
+  if (saved.deckIds.length !== state.deck.length) return null;
+  for (let i = 0; i < saved.deckIds.length; i++) {
+    if (saved.deckIds[i] !== state.deck[i].id) return null;
+  }
+  const byId = new Map();
+  for (const card of state.cards) if (!byId.has(card.id)) byId.set(card.id, card);
+  const order = [];
+  for (const item of saved.order) {
+    const card = byId.get(item.cardId);
+    if (!card || !item.label || !Array.isArray(item.options)) return null;
+    order.push({
+      card: card,
+      label: item.label,
+      promptHtml: item.promptHtml,
+      options: item.options,
+      correctText: item.correctText
+    });
+  }
+  return {
+    order: order,
+    pos: Number.isInteger(saved.pos) ? saved.pos : 0,
+    correct: Number.isInteger(saved.correct) ? saved.correct : 0,
+    answered: Number.isInteger(saved.answered) ? saved.answered : 0,
+    current: null,
+    selected: Number.isInteger(saved.selected) ? saved.selected : null
+  };
+}
+
+function startQuiz(forceNew) {
+  if (!forceNew) {
+    const saved = restoreQuizState();
+    if (saved && saved.order.length && saved.pos <= saved.order.length) {
+      quiz = saved;
+      renderQuiz();
+      return;
+    }
+  }
   quiz = { order: [], pos: 0, correct: 0, answered: 0, current: null, selected: null };
   const pools = buildQuestionPools();
   const source = shuffleArray(state.deck.slice());
   quiz.order = source.map(c => makeQuestion(c, pools)).filter(Boolean);
+  quiz.selected = null;
+  saveQuizState();
   renderQuiz();
+}
+
+function feedbackHtml(q, index) {
+  const chosen = q.options[index];
+  const correctOption = q.options.find(o => o.correct);
+  const correctText = correctOption ? correctOption.text : '';
+  let html = chosen && chosen.correct
+    ? '<strong>Correct!</strong>'
+    : '<strong>Not quite.</strong> Correct answer: <span class="correct-text">' + esc(correctText) + '</span>';
+  html += '<details class="fb-details"><summary>Show details</summary>' + fieldsHtml(q.card) + '</details>';
+  return html;
 }
 
 function renderQuiz() {
   const body = document.getElementById('quizBody');
   if (!state.deck.length) {
-    body.innerHTML = '<div class="panel center muted">No methods in this section.</div>';
+    body.innerHTML = '<div class="panel center muted">No entries in this section.</div>';
     return;
   }
   if (!quiz.order.length) {
@@ -394,10 +647,21 @@ function renderQuiz() {
   }
   const q = quiz.order[quiz.pos];
   quiz.current = q;
-  quiz.selected = null;
-  const opts = q.options.map((o, i) =>
-    '<button class="option" type="button" data-index="' + i + '">' + esc(o.text) + '</button>'
-  ).join('');
+  const selected = Number.isInteger(quiz.selected) ? quiz.selected : null;
+  quiz.selected = selected;
+  const opts = q.options.map((o, i) => {
+    let cls = 'option';
+    if (selected !== null) {
+      if (o.correct) cls += ' correct';
+      else if (i === selected) cls += ' wrong';
+    }
+    return '<button class="' + cls + '" type="button" data-index="' + i + '"' +
+      (selected !== null ? ' disabled' : '') + '>' + esc(o.text) + '</button>';
+  }).join('');
+  const answered = selected !== null;
+  const feedbackClass = answered
+    ? 'feedback ' + (q.options[selected] && q.options[selected].correct ? 'correct' : 'wrong')
+    : 'feedback hidden';
   body.innerHTML =
     '<div class="study-head">' +
       '<div>Question ' + (quiz.pos + 1) + ' / ' + quiz.order.length + '</div>' +
@@ -408,20 +672,23 @@ function renderQuiz() {
       '<div class="chips left"><span class="chip">' + esc(q.label) + '</span>' + sevBadge(q.card) + '</div>' +
       '<h2 class="quiz-prompt">' + q.promptHtml + '</h2>' +
       '<div class="options" id="options">' + opts + '</div>' +
-      '<div class="feedback hidden" id="feedback"></div>' +
-      '<button class="btn primary hidden" type="button" id="nextQuestion">Next question →</button>' +
+      '<div class="' + feedbackClass + '" id="feedback">' + (answered ? feedbackHtml(q, selected) : '') + '</div>' +
+      '<button class="btn primary' + (answered ? '' : ' hidden') + '" type="button" id="nextQuestion">Next question →</button>' +
     '</div>';
-  body.querySelectorAll('.option').forEach(btn => {
-    btn.addEventListener('click', () => answerQuiz(Number(btn.dataset.index)));
-  });
+  if (!answered) {
+    body.querySelectorAll('.option').forEach(btn => {
+      btn.addEventListener('click', () => answerQuiz(Number(btn.dataset.index)));
+    });
+  }
   document.getElementById('nextQuestion').addEventListener('click', nextQuestion);
 }
 
 function answerQuiz(index) {
   const q = quiz.current;
   if (!q || quiz.selected !== null) return;
-  quiz.selected = index;
   const chosen = q.options[index];
+  if (!chosen) return;
+  quiz.selected = index;
   quiz.answered++;
   if (chosen.correct) quiz.correct++;
   document.querySelectorAll('.option').forEach((btn, idx) => {
@@ -431,27 +698,26 @@ function answerQuiz(index) {
   });
   const fb = document.getElementById('feedback');
   fb.classList.remove('hidden');
-  const correctText = q.options.find(o => o.correct).text;
-  let html = chosen.correct
-    ? '<strong>Correct!</strong>'
-    : '<strong>Not quite.</strong> Correct answer: <span class="correct-text">' + esc(correctText) + '</span>';
-  html += '<details class="fb-details"><summary>Show method details</summary>' + fieldsHtml(q.card) + '</details>';
   fb.className = 'feedback ' + (chosen.correct ? 'correct' : 'wrong');
-  fb.innerHTML = html;
+  fb.innerHTML = feedbackHtml(q, index);
   document.getElementById('nextQuestion').classList.remove('hidden');
   document.getElementById('nextQuestion').focus();
   const head = document.querySelector('#quizBody .study-head');
   if (head) head.lastElementChild.textContent = 'Score: ' + quiz.correct + ' / ' + quiz.answered;
+  saveQuizState();
 }
 
 function nextQuestion() {
   quiz.pos++;
+  quiz.selected = null;
+  saveQuizState();
   renderQuiz();
 }
 
 function renderQuizSummary() {
   const total = quiz.answered || 0;
   const pct = total ? Math.round((quiz.correct / total) * 100) : 0;
+  saveQuizState();
   document.getElementById('quizBody').innerHTML =
     '<div class="quiz-card summary">' +
       '<h2>Quiz complete</h2>' +
@@ -460,7 +726,7 @@ function renderQuizSummary() {
       '<div class="progress"><div class="bar" style="width:' + pct + '%"></div></div>' +
       '<button class="btn primary" type="button" id="restartQuiz">Start again</button>' +
     '</div>';
-  document.getElementById('restartQuiz').addEventListener('click', startQuiz);
+  document.getElementById('restartQuiz').addEventListener('click', () => startQuiz(true));
 }
 function renderBrowse() {
   const searchEl = document.getElementById('browseSearch');
@@ -473,7 +739,7 @@ function renderBrowse() {
     : base;
   const list = document.getElementById('browseList');
   if (!filtered.length) {
-    list.innerHTML = '<p class="muted">No methods match your search.</p>';
+    list.innerHTML = '<p class="muted">No entries match your search.</p>';
     return;
   }
   const groups = new Map();
@@ -518,6 +784,10 @@ function buildSectionFilter() {
   }
   sel.innerHTML = opts;
   sel.value = state.section;
+  if (sel.value !== state.section) {
+    state.section = 'all';
+    sel.value = 'all';
+  }
 }
 
 function buildSeverityFilter() {
@@ -537,7 +807,7 @@ function updateFooter() {
   if (!el) return;
   const counts = { major: 0, mid: 0, minor: 0 };
   for (const c of state.cards) counts[c.importance]++;
-  el.textContent = state.cards.length + ' methods loaded (' + counts.major + ' major · ' + counts.mid + ' mid · ' + counts.minor + ' minor) · ' + state.known.size + ' marked known · deck ordered major → mid → minor unless shuffled';
+  el.textContent = state.cards.length + ' entries loaded from ' + state.source + ' (' + counts.major + ' major · ' + counts.mid + ' mid · ' + counts.minor + ' minor) · ' + state.known.size + ' marked known · deck ordered major → mid → minor unless shuffled' + (state.storageWarning ? ' · ' + state.storageWarning : '');
 }
 
 function setMode(mode) {
@@ -547,6 +817,7 @@ function setMode(mode) {
   if (mode === 'flashcards') renderFlashcard();
   else if (mode === 'quiz') startQuiz();
   else renderBrowse();
+  saveProgress();
   updateFooter();
   closeMenu();
 }
@@ -583,6 +854,7 @@ function setupEvents() {
     if (state.mode === 'flashcards') renderFlashcard();
     else if (state.mode === 'quiz') startQuiz();
     else renderBrowse();
+    saveProgress();
     updateFooter();
   });
 
@@ -592,6 +864,7 @@ function setupEvents() {
     if (state.mode === 'flashcards') renderFlashcard();
     else if (state.mode === 'quiz') startQuiz();
     else renderBrowse();
+    saveProgress();
     updateFooter();
   });
 
@@ -602,14 +875,18 @@ function setupEvents() {
     if (state.mode === 'flashcards') renderFlashcard();
     else if (state.mode === 'quiz') startQuiz();
     else renderBrowse();
+    saveProgress();
+    updateFooter();
   });
 
   document.getElementById('resetBtn').addEventListener('click', () => {
     state.known.clear();
-    saveProgress();
+    state.index = 0;
+    clearQuizState();
     quiz = { order: [], pos: 0, correct: 0, answered: 0, current: null, selected: null };
+    saveProgress();
     if (state.mode === 'flashcards') renderFlashcard();
-    else if (state.mode === 'quiz') startQuiz();
+    else if (state.mode === 'quiz') startQuiz(true);
     else renderBrowse();
     updateFooter();
   });
@@ -632,14 +909,31 @@ function setupEvents() {
     }
   }, true);
 
-  document.getElementById('fileInput').addEventListener('change', e => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => start(String(reader.result));
-    reader.onerror = () => showLoadError(new Error('Could not read the selected file.'));
-    reader.readAsText(file);
+  const importInput = document.getElementById('importInput');
+  document.getElementById('importBtn').addEventListener('click', () => importInput.click());
+  importInput.addEventListener('change', e => {
+    importFile(e.target.files && e.target.files[0]);
+    e.target.value = '';
   });
+  document.getElementById('fileInput').addEventListener('change', e => {
+    importFile(e.target.files && e.target.files[0]);
+    e.target.value = '';
+  });
+  document.getElementById('savedSelect').addEventListener('change', e => {
+    const id = e.target.value;
+    if (!id) return;
+    if (id === '__default__') {
+      loadDefaultDocument();
+      return;
+    }
+    try {
+      const saved = loadDocument(id);
+      start(saved.text, saved.meta.name);
+    } catch (err) {
+      showLoadError(err);
+    }
+  });
+  renderSavedOptions();
 
   document.addEventListener('keydown', e => {
     if (state.mode !== 'flashcards') return;
@@ -659,38 +953,69 @@ function setupEvents() {
   });
 }
 
+function importFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => start(String(reader.result), file.name, { persist: true });
+  reader.onerror = () => showLoadError(new Error('Could not read the selected file.'));
+  reader.readAsText(file);
+}
+
 function showLoadError(err) {
   document.getElementById('loading').classList.add('hidden');
+  document.getElementById('app').classList.add('hidden');
   document.getElementById('loadError').classList.remove('hidden');
   document.getElementById('loadErrorMsg').textContent = err && err.message ? err.message : String(err);
 }
 
-function start(md) {
-  state.cards = parseMethods(md);
-  if (!state.cards.length) {
-    showLoadError(new Error('No method sections (#### headings) were found in METHODS.md.'));
+function start(md, source, options) {
+  options = options || {};
+  const name = source || 'METHODS.md';
+  const cards = parseMethods(md);
+  if (!cards.length) {
+    showLoadError(new Error('No entries were found in ' + name + '. Add headings such as "#### Name" to mark each entry.'));
     return;
   }
+  state.docId = documentId(md);
+  state.source = name;
+  state.cards = cards;
+  state.storageWarning = '';
+  if (options.persist) saveDocument(state.docId, name, md);
   loadProgress();
   const validIds = new Set(state.cards.map(c => c.id));
   state.known = new Set(Array.from(state.known).filter(id => validIds.has(id)));
+  quiz = { order: [], pos: 0, correct: 0, answered: 0, current: null, selected: null };
   buildSectionFilter();
   buildSeverityFilter();
   document.getElementById('loading').classList.add('hidden');
   document.getElementById('loadError').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  rebuildDeck();
-  setMode('flashcards');
+  document.getElementById('shuffleBtn').textContent = 'Shuffle: ' + (state.shuffled ? 'on' : 'off');
+  rebuildDeck({ keepIndex: true, restoreOrder: true });
+  setMode(state.mode || 'flashcards');
+  renderSavedOptions();
   updateFooter();
+}
+
+async function fetchDefaultMarkdown() {
+  const res = await fetch('METHODS.md', { cache: 'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const text = await res.text();
+  if (/^\s*<!doctype html/i.test(text)) throw new Error('The server returned an HTML page instead of Markdown.');
+  return text;
+}
+
+async function loadDefaultDocument() {
+  try {
+    start(await fetchDefaultMarkdown(), 'METHODS.md');
+  } catch (err) {
+    showLoadError(err);
+  }
 }
 
 async function boot() {
   try {
-    const res = await fetch('METHODS.md', { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const text = await res.text();
-    if (/^\s*<!doctype html/i.test(text)) throw new Error('The server returned an HTML page instead of Markdown.');
-    start(text);
+    start(await fetchDefaultMarkdown(), 'METHODS.md');
   } catch (err) {
     showLoadError(err);
   }
