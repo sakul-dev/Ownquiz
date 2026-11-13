@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
   <title>Ownquiz — Markdown flashcards &amp; quiz</title>
   <link rel="stylesheet" href="./style.css" type="text/css">
 </head>
@@ -19,6 +22,10 @@
       <span class="bar"></span>
     </button>
     <div class="toolbar" id="toolbar">
+      <div class="menu-head">
+        <span class="menu-title">Menu</span>
+        <button class="menu-close" id="menuClose" type="button" aria-label="Close menu">×</button>
+      </div>
       <div class="tabs" id="tabs">
         <button class="tab active" data-mode="flashcards" type="button">Flashcards</button>
         <button class="tab" data-mode="quiz" type="button">Quiz</button>
@@ -40,6 +47,7 @@
     </div>
   </div>
 </header>
+<div class="menu-overlay" id="menuOverlay"></div>
 
 <main class="wrap">
   <div id="loading" class="panel center">
@@ -71,19 +79,25 @@
         <div id="fcKnown">0 / 1 known</div>
       </div>
       <div class="progress"><div class="bar" id="fcBar"></div></div>
-      <div class="flashcard-stage">
-        <div class="flashcard" id="flashcard">
-          <div class="face front" id="fcFront"></div>
-          <div class="face back" id="fcBack"></div>
+      <div class="flashcard-stage" id="flashcardStage">
+        <div class="swipe-badge swipe-left" id="swipeBadgeLeft" aria-hidden="true">Still learning</div>
+        <div class="swipe-badge swipe-right" id="swipeBadgeRight" aria-hidden="true">Learned</div>
+        <div class="card-drag" id="cardDrag">
+          <div class="flashcard" id="flashcard">
+            <div class="face front" id="fcFront"></div>
+            <div class="face back" id="fcBack"></div>
+          </div>
         </div>
       </div>
+      <p class="swipe-hint">Swipe right if learned · swipe left to keep practicing</p>
       <div class="card-actions">
         <button class="btn" id="prevCard" type="button">← Prev</button>
-        <button class="btn" id="flipCardBtn" type="button">Flip (Space)</button>
+        <button class="btn" id="flipCardBtn" type="button">Flip card</button>
         <button class="btn warn" id="stillBtn" type="button">Still learning</button>
         <button class="btn good" id="gotBtn" type="button">Got it</button>
         <button class="btn" id="nextCard" type="button">Next →</button>
       </div>
+      <div class="sr-only" id="swipeLive" aria-live="polite"></div>
     </section>
 
     <section id="view-quiz" class="view hidden">

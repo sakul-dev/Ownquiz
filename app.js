@@ -142,8 +142,24 @@ function renderSavedOptions() {
 function closeMenu() {
   const toolbar = document.getElementById('toolbar');
   const toggle = document.getElementById('menuToggle');
+  const overlay = document.getElementById('menuOverlay');
   if (toolbar) toolbar.classList.remove('open');
   if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  if (overlay) overlay.classList.remove('open');
+  document.body.classList.remove('menu-open');
+}
+
+function openMenu() {
+  const toolbar = document.getElementById('toolbar');
+  const toggle = document.getElementById('menuToggle');
+  const overlay = document.getElementById('menuOverlay');
+  if (toolbar) {
+    toolbar.classList.add('open');
+    toolbar.scrollTop = 0;
+  }
+  if (toggle) toggle.setAttribute('aria-expanded', 'true');
+  if (overlay) overlay.classList.add('open');
+  document.body.classList.add('menu-open');
 }
 
 function esc(value) {
@@ -384,7 +400,7 @@ function frontHtml(card) {
   return '<div class="chips"><span class="chip">' + esc(card.section || card.part) + '</span>' + sevBadge(card) + '</div>' +
     '<h2 class="method-name">' + esc(card.name) + '</h2>' +
     '<div class="method-loc">' + esc(card.location) + '</div>' +
-    '<p class="flip-hint">Click the card or press Space to reveal the answer</p>';
+    '<p class="flip-hint">Tap the card to reveal the answer</p>';
 }
 
 function backHtml(card) {
@@ -398,6 +414,8 @@ function renderFlashcard() {
   const front = document.getElementById('fcFront');
   const back = document.getElementById('fcBack');
   const cardEl = document.getElementById('flashcard');
+  resetCardTransform();
+  syncFlipButton();
   if (!state.deck.length) {
     cardEl.classList.remove('flipped');
     front.innerHTML = '<p class="muted">No entries in this section.</p>';
@@ -420,10 +438,124 @@ function renderFlashcard() {
   document.getElementById('fcBar').style.width = (((state.index + 1) / state.deck.length) * 100) + '%';
 }
 
+function syncFlipButton() {
+  const btn = document.getElementById('flipCardBtn');
+  if (btn) btn.textContent = state.flipped ? 'Show question' : 'Flip card';
+}
+
 function flipCard() {
   if (!state.deck.length) return;
   state.flipped = !state.flipped;
   document.getElementById('flashcard').classList.toggle('flipped', state.flipped);
+  syncFlipButton();
+}
+
+const swipe = {
+  tracking: false,
+  dragged: false,
+  animating: false,
+  startX: 0,
+  startY: 0,
+  dx: 0,
+  dy: 0,
+  pointerId: null
+};
+let suppressCardClick = false;
+let suppressTimer = null;
+
+function setSwipeBadges(dx) {
+  const left = document.getElementById('swipeBadgeLeft');
+  const right = document.getElementById('swipeBadgeRight');
+  const amount = Math.min(1, Math.abs(dx) / 110);
+  if (left) left.style.opacity = dx < 0 ? String(amount) : '0';
+  if (right) right.style.opacity = dx > 0 ? String(amount) : '0';
+}
+
+function resetCardTransform() {
+  const drag = document.getElementById('cardDrag');
+  if (drag) {
+    drag.style.transition = '';
+    drag.style.transform = '';
+    drag.style.opacity = '';
+    drag.classList.remove('dragging');
+  }
+  setSwipeBadges(0);
+}
+
+function snapCardBack() {
+  const drag = document.getElementById('cardDrag');
+  if (!drag) return;
+  drag.style.transition = 'transform .2s ease';
+  drag.style.transform = '';
+  setSwipeBadges(0);
+  window.setTimeout(() => {
+    if (drag) drag.style.transition = '';
+  }, 210);
+}
+
+function finishSwipe(direction) {
+  const drag = document.getElementById('cardDrag');
+  if (!drag || swipe.animating) return;
+  swipe.animating = true;
+  drag.style.transition = 'transform .22s ease, opacity .22s ease';
+  drag.style.transform = 'translateX(' + (direction * 120) + '%) rotate(' + (direction * 14) + 'deg)';
+  drag.style.opacity = '0';
+  const live = document.getElementById('swipeLive');
+  if (live) live.textContent = direction > 0 ? 'Marked as learned' : 'Marked as still learning';
+  window.setTimeout(() => {
+    swipe.animating = false;
+    resetCardTransform();
+    markCard(direction > 0);
+  }, 200);
+}
+
+function beginSwipe(e) {
+  if (swipe.animating || !state.deck.length) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (swipe.tracking && e.pointerId !== swipe.pointerId) return;
+  swipe.pointerId = e.pointerId;
+  swipe.startX = e.clientX;
+  swipe.startY = e.clientY;
+  swipe.dx = 0;
+  swipe.dy = 0;
+  swipe.tracking = true;
+  swipe.dragged = false;
+}
+
+function moveSwipe(e) {
+  if (!swipe.tracking || e.pointerId !== swipe.pointerId) return;
+  const dx = e.clientX - swipe.startX;
+  const dy = e.clientY - swipe.startY;
+  swipe.dx = dx;
+  swipe.dy = dy;
+  if (!swipe.dragged) {
+    if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
+    swipe.dragged = true;
+    const drag = document.getElementById('cardDrag');
+    if (drag) drag.classList.add('dragging');
+  }
+  if (e.cancelable) e.preventDefault();
+  const drag = document.getElementById('cardDrag');
+  if (drag) {
+    drag.style.transform = 'translateX(' + dx + 'px) rotate(' + (dx / 22) + 'deg)';
+  }
+  setSwipeBadges(dx);
+}
+
+function endSwipe() {
+  if (!swipe.tracking) return;
+  swipe.tracking = false;
+  if (!swipe.dragged) return;
+  const width = document.getElementById('flashcardStage');
+  const threshold = Math.max(70, Math.min(130, (width ? width.clientWidth : 320) * 0.28));
+  suppressCardClick = true;
+  window.clearTimeout(suppressTimer);
+  suppressTimer = window.setTimeout(() => { suppressCardClick = false; }, 320);
+  if (Math.abs(swipe.dx) >= threshold) {
+    finishSwipe(swipe.dx > 0 ? 1 : -1);
+  } else {
+    snapCardBack();
+  }
 }
 
 function moveCard(delta) {
@@ -827,13 +959,17 @@ function setupEvents() {
   const toolbar = document.getElementById('toolbar');
   menuToggle.addEventListener('click', e => {
     e.stopPropagation();
-    const open = !toolbar.classList.contains('open');
-    toolbar.classList.toggle('open', open);
-    menuToggle.setAttribute('aria-expanded', String(open));
+    if (toolbar.classList.contains('open')) closeMenu();
+    else openMenu();
   });
+  const menuClose = document.getElementById('menuClose');
+  if (menuClose) menuClose.addEventListener('click', closeMenu);
+  const menuOverlay = document.getElementById('menuOverlay');
+  if (menuOverlay) menuOverlay.addEventListener('click', closeMenu);
   document.addEventListener('click', e => {
     if (!toolbar.classList.contains('open')) return;
     if (toolbar.contains(e.target) || menuToggle.contains(e.target)) return;
+    if (e.target === menuOverlay) return;
     closeMenu();
   });
   document.addEventListener('keydown', e => {
@@ -896,10 +1032,38 @@ function setupEvents() {
   document.getElementById('flipCardBtn').addEventListener('click', flipCard);
   document.getElementById('stillBtn').addEventListener('click', () => markCard(false));
   document.getElementById('gotBtn').addEventListener('click', () => markCard(true));
-  document.getElementById('fcFront').addEventListener('click', flipCard);
+  const cardTap = e => {
+    if (suppressCardClick) {
+      suppressCardClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    flipCard();
+  };
+  document.getElementById('fcFront').addEventListener('click', cardTap);
   document.getElementById('fcBack').addEventListener('click', e => {
+    if (suppressCardClick) {
+      suppressCardClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (e.target.closest('.flip-back')) flipCard();
   });
+
+  const stage = document.getElementById('flashcardStage');
+  if (stage) {
+    stage.addEventListener('pointerdown', beginSwipe);
+    stage.addEventListener('pointermove', moveSwipe);
+    stage.addEventListener('pointerup', endSwipe);
+    stage.addEventListener('pointercancel', endSwipe);
+    stage.addEventListener('lostpointercapture', endSwipe);
+    stage.addEventListener('dragstart', e => e.preventDefault());
+    window.addEventListener('pointermove', moveSwipe);
+    window.addEventListener('pointerup', endSwipe);
+    window.addEventListener('pointercancel', endSwipe);
+  }
 
   document.getElementById('browseSearch').addEventListener('input', renderBrowse);
   document.getElementById('browseList').addEventListener('toggle', e => {
