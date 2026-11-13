@@ -64,8 +64,9 @@
     --sev-minor-fg: #a1a1aa;
   }
 }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; touch-action: pan-y; }
 html, body { margin: 0; }
+body { touch-action: pan-y; }
 body {
   font-family: var(--sans);
   color: var(--ink);
@@ -208,21 +209,6 @@ body.menu-open { overflow: hidden; }
   padding-bottom: 2px;
 }
 .menu-title { font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.menu-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-2);
-  color: var(--ink);
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-}
 .tabs {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -26,7 +26,18 @@ function refreshView() {
   else renderBrowse();
 }
 
+function preventZoom() {
+  const block = e => e.preventDefault();
+  document.addEventListener('gesturestart', block, { passive: false });
+  document.addEventListener('gesturechange', block, { passive: false });
+  document.addEventListener('gestureend', block, { passive: false });
+  document.addEventListener('touchmove', e => {
+    if (e.touches && e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+}
+
 function setupEvents() {
+  preventZoom();
   setupMenuEvents();
   setupFlashcardEvents();
   setupBrowseEvents();

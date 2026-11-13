@@ -44,8 +44,6 @@ function setupMenuEvents() {
     });
   }
 
-  const menuClose = document.getElementById('menuClose');
-  if (menuClose) menuClose.addEventListener('click', closeMenu);
   const menuOverlay = document.getElementById('menuOverlay');
   if (menuOverlay) menuOverlay.addEventListener('click', closeMenu);
 
