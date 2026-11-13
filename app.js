@@ -962,6 +962,17 @@ function setupEvents() {
     if (toolbar.classList.contains('open')) closeMenu();
     else openMenu();
   });
+  const homeBtn = document.getElementById('homeBtn');
+  if (homeBtn) {
+    const goHome = () => setMode('flashcards');
+    homeBtn.addEventListener('click', goHome);
+    homeBtn.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        goHome();
+      }
+    });
+  }
   const menuClose = document.getElementById('menuClose');
   if (menuClose) menuClose.addEventListener('click', closeMenu);
   const menuOverlay = document.getElementById('menuOverlay');

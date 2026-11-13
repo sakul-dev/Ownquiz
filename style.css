@@ -124,8 +124,10 @@ code {
   padding-top: 12px;
   padding-bottom: 12px;
 }
-.brand { flex: 1 1 auto; min-width: 0; }
-.brand h1 { font-size: 1.05rem; margin: 0; letter-spacing: -.01em; }
+.brand { flex: 1 1 auto; min-width: 0; cursor: pointer; border-radius: 10px; -webkit-tap-highlight-color: transparent; }
+.brand:hover h1 { opacity: .7; }
+.brand:active { transform: scale(.98); }
+.brand h1 { font-size: 1.05rem; margin: 0; letter-spacing: -.01em; transition: opacity .15s; }
 .brand p { display: none; margin: 2px 0 0; color: var(--muted); font-size: .8rem; }
 .menu-toggle {
   display: inline-flex;
