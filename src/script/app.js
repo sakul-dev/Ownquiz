@@ -154,7 +154,7 @@ function start(md, source, options) {
 }
 
 async function fetchDefaultMarkdown() {
-  const res = await fetch('METHODS.md', { cache: 'no-store' });
+  const res = await fetch('docs/METHODS.md', { cache: 'no-store' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const text = await res.text();
   if (/^\s*<!doctype html/i.test(text)) throw new Error('The server returned an HTML page instead of Markdown.');
