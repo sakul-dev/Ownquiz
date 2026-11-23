@@ -262,6 +262,7 @@ function answerQuiz(index) {
   document.getElementById('nextQuestion').focus();
   const head = document.querySelector('#quizBody .study-head');
   if (head) head.lastElementChild.textContent = 'Score: ' + quiz.correct + ' / ' + quiz.answered;
+  logLearning('quiz', chosen.correct);
   saveQuizState();
 }
 

@@ -14,6 +14,7 @@ function setMode(mode) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('hidden', v.id !== 'view-' + mode));
   if (mode === 'flashcards') renderFlashcard();
   else if (mode === 'quiz') startQuiz();
+  else if (mode === 'calendar') renderCalendar();
   else renderBrowse();
   saveProgress();
   updateFooter();
@@ -23,6 +24,7 @@ function setMode(mode) {
 function refreshView() {
   if (state.mode === 'flashcards') renderFlashcard();
   else if (state.mode === 'quiz') startQuiz();
+  else if (state.mode === 'calendar') renderCalendar();
   else renderBrowse();
 }
 
@@ -41,6 +43,7 @@ function setupEvents() {
   setupMenuEvents();
   setupFlashcardEvents();
   setupBrowseEvents();
+  setupCalendarEvents();
 
   document.getElementById('tabs').addEventListener('click', e => {
     const tab = e.target.closest('.tab');

@@ -244,8 +244,12 @@ function moveCard(delta) {
 function markCard(isKnown) {
   if (!state.deck.length) return;
   const card = state.deck[state.index];
-  if (isKnown) state.known.add(card.id);
-  else state.known.delete(card.id);
+  if (isKnown) {
+    state.known.add(card.id);
+    logLearning('slide', card.id);
+  } else {
+    state.known.delete(card.id);
+  }
   saveProgress();
   updateFooter();
   moveCard(1);

@@ -29,6 +29,7 @@
         <button class="tab active" data-mode="flashcards" type="button">Flashcards</button>
         <button class="tab" data-mode="quiz" type="button">Quiz</button>
         <button class="tab" data-mode="browse" type="button">Browse</button>
+        <button class="tab" data-mode="calendar" type="button">Calendar</button>
       </div>
       <label class="filter">Section
         <select id="sectionFilter"></select>
@@ -109,6 +110,17 @@
       </div>
       <div id="browseList"></div>
     </section>
+
+    <section id="view-calendar" class="view hidden">
+      <div class="calendar-tools">
+        <button class="btn ghost" id="calPrev" type="button" aria-label="Previous month">←</button>
+        <h2 id="calTitle"></h2>
+        <button class="btn ghost" id="calNext" type="button" aria-label="Next month">→</button>
+      </div>
+      <p class="cal-summary" id="calSummary"></p>
+      <div id="calendarGrid" class="calendar-grid"></div>
+      <div id="calendarDetail" class="calendar-detail"></div>
+    </section>
   </div>
 </main>
 
@@ -123,6 +135,7 @@
   <script src="./src/script/flashcards.js" defer></script>
   <script src="./src/script/quiz.js" defer></script>
   <script src="./src/script/browse.js" defer></script>
+  <script src="./src/script/calendar.js" defer></script>
   <script src="./src/script/menu.js" defer></script>
   <script src="./src/script/app.js" defer></script>
 </body>
