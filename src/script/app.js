@@ -1,13 +1,5 @@
 'use strict';
 
-function updateFooter() {
-  const el = document.getElementById('footerStats');
-  if (!el) return;
-  const counts = { major: 0, mid: 0, minor: 0 };
-  for (const c of state.cards) counts[c.importance]++;
-  el.textContent = state.cards.length + ' entries loaded from ' + state.source + ' (' + counts.major + ' major · ' + counts.mid + ' mid · ' + counts.minor + ' minor) · ' + state.known.size + ' marked known · deck ordered major → mid → minor unless shuffled' + (state.storageWarning ? ' · ' + state.storageWarning : '');
-}
-
 function setMode(mode) {
   state.mode = mode;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
