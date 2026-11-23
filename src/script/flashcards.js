@@ -251,7 +251,6 @@ function markCard(isKnown) {
     state.known.delete(card.id);
   }
   saveProgress();
-  updateFooter();
   moveCard(1);
 }
 

@@ -9,7 +9,6 @@ function setMode(mode) {
   else if (mode === 'calendar') renderCalendar();
   else renderBrowse();
   saveProgress();
-  updateFooter();
   closeMenu();
 }
 
@@ -47,7 +46,6 @@ function setupEvents() {
     rebuildDeck();
     refreshView();
     saveProgress();
-    updateFooter();
   });
 
   document.getElementById('severityFilter').addEventListener('change', e => {
@@ -55,7 +53,6 @@ function setupEvents() {
     rebuildDeck();
     refreshView();
     saveProgress();
-    updateFooter();
   });
 
   document.getElementById('shuffleBtn').addEventListener('click', () => {
@@ -64,7 +61,6 @@ function setupEvents() {
     rebuildDeck();
     refreshView();
     saveProgress();
-    updateFooter();
   });
 
   document.getElementById('resetBtn').addEventListener('click', () => {
@@ -74,7 +70,6 @@ function setupEvents() {
     quiz = { order: [], pos: 0, correct: 0, answered: 0, current: null, selected: null };
     saveProgress();
     refreshView();
-    updateFooter();
   });
 
   const importInput = document.getElementById('importInput');
@@ -145,7 +140,6 @@ function start(md, source, options) {
   rebuildDeck({ keepIndex: true, restoreOrder: true });
   setMode(state.mode || 'flashcards');
   renderSavedOptions();
-  updateFooter();
 }
 
 async function fetchDefaultMarkdown() {
