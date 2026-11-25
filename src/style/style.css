@@ -280,6 +280,41 @@ select {
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .toolbar .btn { width: 100%; }
 .toolbar .filter select { flex: 1 1 auto; }
+input[type="time"] {
+  font: inherit;
+  font-size: 16px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+}
+.reminder-row { display: flex; align-items: center; gap: 8px; }
+.reminder-row input[type="time"] { flex: 1 1 auto; min-width: 0; }
+.reminder-row .btn { flex: 0 0 auto; width: auto; }
+
+/* Daily reminder opt-in */
+.notify-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .08);
+}
+.notify-copy { flex: 1 1 260px; min-width: 0; }
+.notify-copy h2 { margin: 0 0 4px; font-size: 1rem; }
+.notify-copy p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.5; }
+.notify-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.notify-time { display: flex; align-items: center; gap: 8px; font-size: .84rem; font-weight: 600; color: var(--muted); }
+.notify-actions .btn { min-height: 42px; padding: 8px 12px; font-size: .84rem; }
+.notify-actions input[type="time"] { min-height: 42px; }
 
 /* Content */
 main { padding: 6px 0 calc(28px + var(--safe-bottom)); }
@@ -593,6 +628,7 @@ main { padding: 6px 0 calc(28px + var(--safe-bottom)); }
   .tab { flex: 0 0 auto; min-height: 0; padding: 8px 14px; font-size: .85rem; border-radius: 999px; }
   .filter { flex-direction: row; align-items: center; gap: 6px; }
   select { width: auto; min-height: 0; font-size: .82rem; padding: 8px 10px; max-width: 260px; }
+  input[type="time"] { width: auto; min-height: 0; font-size: .82rem; padding: 8px 10px; }
   .toolbar .btn { width: auto; min-height: 0; padding: 9px 14px; font-size: .85rem; }
   .toolbar .filter select { flex: 0 0 auto; }
   .face { padding: 30px; }

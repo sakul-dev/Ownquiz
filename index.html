@@ -7,6 +7,13 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
   <title>Ownquiz — Markdown flashcards &amp; quiz</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Ownquiz">
   <link rel="stylesheet" href="./src/style/style.css" type="text/css">
 </head>
 <body>
@@ -38,6 +45,13 @@
         <select id="severityFilter"></select>
       </label>
       <button class="btn ghost" id="shuffleBtn" type="button">Shuffle: off</button>
+      <div class="filter reminder-filter hidden" id="reminderFilter">
+        <span>Daily reminder</span>
+        <div class="reminder-row">
+          <input type="time" id="reminderTime" value="18:00" aria-label="Daily reminder time">
+          <button class="btn ghost" id="reminderToggle" type="button" aria-pressed="false">Off</button>
+        </div>
+      </div>
       <button class="btn ghost" id="resetBtn" type="button">Reset progress</button>
       <label class="filter">Saved
         <select id="savedSelect" title="Load a previously imported Markdown file"></select>
@@ -73,6 +87,20 @@
   </div>
 
   <div id="app" class="hidden">
+    <div id="notifyPrompt" class="notify-prompt hidden" role="region" aria-labelledby="notifyTitle">
+      <div class="notify-copy">
+        <h2 id="notifyTitle">Daily study reminder</h2>
+        <p id="notifyBody">Get one notification a day while Ownquiz is open, reminding you to review your slides.</p>
+      </div>
+      <div class="notify-actions">
+        <label class="notify-time" id="notifyTimeWrap">Remind me at
+          <input type="time" id="notifyTime" value="18:00">
+        </label>
+        <button class="btn primary" id="notifyEnable" type="button">Enable reminders</button>
+        <button class="btn ghost" id="notifyDismiss" type="button">Not now</button>
+      </div>
+    </div>
+
     <section id="view-flashcards" class="view">
       <div class="study-head">
         <div id="fcCounter">Card 1 / 1</div>
@@ -137,6 +165,7 @@
   <script src="./src/script/browse.js" defer></script>
   <script src="./src/script/calendar.js" defer></script>
   <script src="./src/script/menu.js" defer></script>
+  <script src="./src/script/notifications.js" defer></script>
   <script src="./src/script/app.js" defer></script>
 </body>
 </html>

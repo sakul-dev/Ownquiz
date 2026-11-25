@@ -35,6 +35,7 @@ function setupEvents() {
   setupFlashcardEvents();
   setupBrowseEvents();
   setupCalendarEvents();
+  setupNotificationEvents();
 
   document.getElementById('tabs').addEventListener('click', e => {
     const tab = e.target.closest('.tab');
@@ -140,6 +141,7 @@ function start(md, source, options) {
   rebuildDeck({ keepIndex: true, restoreOrder: true });
   setMode(state.mode || 'flashcards');
   renderSavedOptions();
+  initNotifications();
 }
 
 async function fetchDefaultMarkdown() {
